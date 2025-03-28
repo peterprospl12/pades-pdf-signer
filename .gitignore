@@ -1,48 +1,38 @@
-# Python cache files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 
-# Virtual Environment
 venv/
 env/
 ENV/
 
-# Distribution / packaging
 dist/
 build/
 *.egg-info/
 
-# PyInstaller
 *.manifest
 *.spec
 
-# IDE files
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Logs and databases
 *.log
 *.sqlite
 *.db
 
-# Test files and keys (for security)
 *.pem
 *.key
 *test*.pdf
 *signed*.pdf
 
-# OS specific files
 .DS_Store
 Thumbs.db
 
-# PyQt compiled resources
 *.qrc.py
 
-# Temporary files
 tmp/
 temp/

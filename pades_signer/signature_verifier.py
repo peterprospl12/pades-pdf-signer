@@ -5,6 +5,7 @@ import hashlib
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.exceptions import InvalidSignature
+from .pdf_utils import compute_document_hash
 
 class SignatureVerifier:
     
@@ -26,17 +27,6 @@ class SignatureVerifier:
                 return None
         return None
         
-    def compute_document_hash(self, pdf_path):
-        pdf_document = fitz.open(pdf_path)
-        content = b""
-        
-        for page_num in range(pdf_document.page_count):
-            page = pdf_document[page_num]
-            content += page.get_text("text").encode('utf-8')
-            
-        hash_obj = hashlib.sha256(content)
-        return hash_obj.digest()
-        
     def verify_signature(self, pdf_path):
         if not self.public_key:
             return False, "No public key provided for verification"
@@ -50,7 +40,7 @@ class SignatureVerifier:
         except:
             return False, "Invalid signature format"
         
-        document_hash = self.compute_document_hash(pdf_path)
+        document_hash = compute_document_hash(pdf_path)
         
         try:
             self.public_key.verify(

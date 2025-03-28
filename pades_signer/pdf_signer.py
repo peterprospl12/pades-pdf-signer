@@ -1,11 +1,11 @@
 import os
 import time
-import hashlib
 import fitz  
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 import base64
 import json
+from .pdf_utils import compute_document_hash
 
 class PDFSigner:
     
@@ -15,22 +15,11 @@ class PDFSigner:
     def set_private_key(self, private_key):
         self.private_key = private_key
         
-    def compute_document_hash(self, pdf_path):
-        pdf_document = fitz.open(pdf_path)
-        content = b""
-        
-        for page_num in range(pdf_document.page_count):
-            page = pdf_document[page_num]
-            content += page.get_text("text").encode('utf-8')
-            
-        hash_obj = hashlib.sha256(content)
-        return hash_obj.digest()
-        
     def sign_document(self, pdf_path, output_path, signer_info=None):
         if not self.private_key:
             raise ValueError("No private key available for signing")
             
-        document_hash = self.compute_document_hash(pdf_path)
+        document_hash = compute_document_hash(pdf_path)
         
         signature = self.private_key.sign(
             document_hash,

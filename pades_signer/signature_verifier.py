@@ -1,7 +1,6 @@
 import json
 import base64
 import fitz
-import hashlib
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.exceptions import InvalidSignature

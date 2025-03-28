@@ -3,8 +3,7 @@ import sys
 import time
 from PyQt5.QtWidgets import (QMainWindow, QAction, QFileDialog, QLabel, QPushButton, 
                             QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, 
-                            QInputDialog, QLineEdit, QDialog, QProgressBar, QTabWidget)
-from PyQt5.QtGui import QIcon, QPixmap
+                            QInputDialog, QLineEdit, QTabWidget)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

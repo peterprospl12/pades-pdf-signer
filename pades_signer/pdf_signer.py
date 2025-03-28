@@ -1,4 +1,3 @@
-import os
 import time
 import fitz  
 from cryptography.hazmat.primitives import hashes

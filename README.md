@@ -2,6 +2,9 @@
 
 A desktop application for creating and verifying qualified electronic signatures in PDF documents according to the PAdES (PDF Advanced Electronic Signature) standard.
 
+![image](https://github.com/user-attachments/assets/cdef7197-4dc7-4490-a3fc-6ed51e405f40)
+
+
 ## Features
 
 - **Secure Key Management**: Private keys are stored encrypted on USB drives using AES-256

@@ -1,7 +1,6 @@
 cryptography>=38.0.0
 PyQt5>=5.15.0
-PyMuPDF>=1.18.0
 pyudev>=0.22.0  # For Linux
 pywin32>=303    # For Windows
 psutil>=5.9.0
-python-docx>=0.8.11
+PyPDF2~=3.0.1

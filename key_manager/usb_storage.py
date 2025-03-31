@@ -30,6 +30,7 @@ class UsbStorage:
                         if mount_point:
                             usb_drives.append(mount_point)
             except ImportError:
+                import pyudev
                 for partition in psutil.disk_partitions(all=True):
                     if 'sd' in partition.device and partition.mountpoint:
                         usb_drives.append(partition.mountpoint)

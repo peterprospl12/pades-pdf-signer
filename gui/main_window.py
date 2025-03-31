@@ -3,19 +3,15 @@ import sys
 import time
 from PyQt5.QtWidgets import (QMainWindow, QAction, QFileDialog, QLabel, QPushButton, 
                             QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, 
-                            QInputDialog, QLineEdit, QTabWidget)
+                            QInputDialog, QLineEdit, QTabWidget, QApplication)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from key_manager.usb_storage import UsbStorage
 from pades_signer.pdf_signer import PDFSigner
 from pades_signer.signature_verifier import SignatureVerifier
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from key_manager.key_generator import KeyGenerator, decrypt_private_key
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class USBDetectorThread(QThread):
     usb_detected = pyqtSignal(list)
@@ -24,15 +20,32 @@ class USBDetectorThread(QThread):
         while True:
             usb_drives = UsbStorage.get_usb_drives()
             self.usb_detected.emit(usb_drives)
-            time.sleep(2) 
+            time.sleep(2)
 
 class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        
+
+        self.public_key_path = None
+        self.public_key_path_label = None
+        self.key_status = None
+        self.pin_input = None
+        self.usb_detector_thread = None
+        self.pin_label = None
+        self.verify_status = None
+        self.public_key_label = None
+        self.verify_path_label = None
+        self.sign_status = None
+        self.pdf_path_label = None
+        self.usb_status = None
+        self.status_bar = None
+        self.key_tab = None
+        self.verify_tab = None
+        self.sign_tab = None
+        self.tabs = None
         self.setWindowTitle("PAdES Signature Application")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 800, 200)
         
         self.private_key = None
         self.public_key = None
@@ -47,21 +60,23 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.sign_tab = QWidget()
         self.verify_tab = QWidget()
+        self.key_tab = QWidget()
         
         self.tabs.addTab(self.sign_tab, "Sign Document")
         self.tabs.addTab(self.verify_tab, "Verify Signature")
-        
+        self.tabs.addTab(self.key_tab, "Generate Key")
+
         self.setup_sign_tab()
-        
         self.setup_verify_tab()
-        
+        self.setup_key_tab()
+
         self.setCentralWidget(self.tabs)
         
         self.setup_menu()
         
-        self.statusBar = self.statusBar()
+        self.status_bar = self.statusBar()
         self.usb_status = QLabel("USB Status: Not Connected")
-        self.statusBar.addPermanentWidget(self.usb_status)
+        self.status_bar.addPermanentWidget(self.usb_status)
         
     def setup_sign_tab(self):
         layout = QVBoxLayout()
@@ -75,8 +90,12 @@ class MainWindow(QMainWindow):
         
         sign_button = QPushButton("Sign Document")
         sign_button.clicked.connect(self.sign_document)
-        
-        self.sign_status = QLabel("Ready")
+
+        if self.private_key is not None:
+            self.sign_status = QLabel("Ready")
+        else:
+            self.sign_status = QLabel("No private key detected!")
+
         self.sign_status.setAlignment(Qt.AlignCenter)
         
         layout.addLayout(file_layout)
@@ -118,6 +137,44 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         
         self.verify_tab.setLayout(layout)
+
+    def setup_key_tab(self):
+        layout = QVBoxLayout()
+
+        pin_layout = QHBoxLayout()
+        self.pin_label = QLabel("Enter PIN:")
+        self.pin_input = QLineEdit()
+        self.pin_input.setEchoMode(QLineEdit.Password)
+        pin_layout.addWidget(self.pin_label)
+        pin_layout.addWidget(self.pin_input)
+
+        path_layout = QHBoxLayout()
+        self.public_key_path_label = QLabel("No public key path selected")
+        select_path_button = QPushButton("Select Public Key Save Path")
+        select_path_button.clicked.connect(self.select_public_key_path)
+        path_layout.addWidget(self.public_key_path_label)
+        path_layout.addWidget(select_path_button)
+
+        generate_key_button = QPushButton("Generate and Save Key")
+        generate_key_button.clicked.connect(self.generate_and_save_key)
+
+        self.key_status = QLabel("Ready")
+        self.key_status.setAlignment(Qt.AlignCenter)
+
+        layout.addLayout(pin_layout)
+        layout.addLayout(path_layout)
+        layout.addWidget(generate_key_button)
+        layout.addWidget(self.key_status)
+
+        layout.addStretch(1)
+
+        self.key_tab.setLayout(layout)
+
+    def select_public_key_path(self):
+        folder_path = QFileDialog.getExistingDirectory(self, "Pick directory where public key will be saved")
+        if folder_path:
+            self.public_key_path = folder_path
+            self.public_key_path_label.setText(folder_path)
         
     def setup_menu(self):
         menu_bar = self.menuBar()
@@ -157,7 +214,11 @@ class MainWindow(QMainWindow):
             if filename.endswith('.key'):
                 self.encrypted_key_path = os.path.join(self.usb_path, filename)
                 self.usb_status.setText(f"USB Connected: {self.usb_path} (Key found)")
+                # self.sign_status.setText("Ready")
+                QApplication.processEvents()
                 return
+
+        self.usb_status.setText(f"USB Connected: {self.usb_path} (No key found)")
     
     def select_pdf_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select PDF File", "", "PDF Files (*.pdf)")
@@ -178,42 +239,19 @@ class MainWindow(QMainWindow):
                 self.public_key_label.setText(file_path)
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load public key: {str(e)}")
-    
-    def decrypt_private_key(self, encrypted_data, pin):
-        salt = encrypted_data[:16]
-        iv = encrypted_data[16:32]
-        encrypted_key = encrypted_data[32:]
-        
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=100000,
-        )
-        aes_key = kdf.derive(pin.encode('utf-8'))
-        
-        cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv))
-        decryptor = cipher.decryptor()
-        padded_data = decryptor.update(encrypted_key) + decryptor.finalize()
-        
-        padding_length = padded_data[-1]
-        private_key_pem = padded_data[:-padding_length]
-        
-        private_key = serialization.load_pem_private_key(
-            private_key_pem,
-            password=None
-        )
-        
-        return private_key
-            
+
+
+
     def sign_document(self):
         if not self.encrypted_key_path:
-            QMessageBox.warning(self, "Error", "No private key found on USB drive")
+            self.sign_status.setText("No private key found on USB drive")
+            QApplication.processEvents()
             return
             
         pdf_path = self.pdf_path_label.text()
         if pdf_path == "No PDF selected" or not os.path.exists(pdf_path):
-            QMessageBox.warning(self, "Error", "Please select a valid PDF file")
+            self.sign_status.setText("No PDF file selected")
+            QApplication.processEvents()
             return
             
         pin, ok = QInputDialog.getText(self, "PIN Required", "Enter your PIN to decrypt the private key:", QLineEdit.Password)
@@ -224,7 +262,9 @@ class MainWindow(QMainWindow):
             encrypted_data = UsbStorage.load_from_usb(self.encrypted_key_path)
             
             self.sign_status.setText("Decrypting private key...")
-            self.private_key = self.decrypt_private_key(encrypted_data, pin)
+            self.private_key = decrypt_private_key(encrypted_data, pin)
+            QApplication.processEvents()
+            time.sleep(2)
             
             signer_name, ok = QInputDialog.getText(self, "Signer Information", "Enter signer name:")
             if not ok:
@@ -235,44 +275,47 @@ class MainWindow(QMainWindow):
             output_path = os.path.join(file_dir, f"signed_{file_name}")
             
             self.sign_status.setText("Signing document...")
-            
             pdf_signer = PDFSigner(self.private_key)
-            signer_info = {"name": signer_name}
-            output_path = pdf_signer.sign_document(pdf_path, output_path, signer_info)
-            
+            output_path = pdf_signer.sign_document(pdf_path, output_path, signer_name)
+            QApplication.processEvents()
+            time.sleep(2)
+
             self.sign_status.setText(f"Document signed successfully and saved to: {output_path}")
-            QMessageBox.information(self, "Success", f"Document signed successfully and saved to: {output_path}")
+            QApplication.processEvents()
+            time.sleep(2)
             
         except Exception as e:
-            self.sign_status.setText(f"Error: {str(e)}")
-            QMessageBox.critical(self, "Error", f"Failed to sign document: {str(e)}")
+            self.sign_status.setText(f"Error! Failed to sign document: {str(e)}")
+            print(str(e))
             
     def verify_signature(self):
         if not self.public_key:
-            QMessageBox.warning(self, "Error", "Please select a public key first")
+            self.sign_status.setText("Please select a public key first")
+            QApplication.processEvents()
             return
             
         pdf_path = self.verify_path_label.text()
         if pdf_path == "No PDF selected" or not os.path.exists(pdf_path):
-            QMessageBox.warning(self, "Error", "Please select a valid PDF file")
+            self.sign_status.setText("Please select a valid PDF file")
+            QApplication.processEvents()
             return
             
         try:
             self.verify_status.setText("Verifying signature...")
-            
             verifier = SignatureVerifier(self.public_key)
             is_valid, message = verifier.verify_signature(pdf_path)
-            
+            QApplication.processEvents()
+            time.sleep(2)
+
             if is_valid:
                 self.verify_status.setText("Signature is valid")
-                QMessageBox.information(self, "Verification Result", "Signature is valid!")
+                QApplication.processEvents()
             else:
                 self.verify_status.setText(f"Invalid signature: {message}")
-                QMessageBox.warning(self, "Verification Result", f"Invalid signature: {message}")
+                QApplication.processEvents()
                 
         except Exception as e:
-            self.verify_status.setText(f"Error: {str(e)}")
-            QMessageBox.critical(self, "Error", f"Failed to verify signature: {str(e)}")
+            self.verify_status.setText(f"Error: Failed to verify signature: {str(e)}")
             
     def show_about(self):
         QMessageBox.about(self, "About PAdES Signer",
@@ -281,3 +324,49 @@ class MainWindow(QMainWindow):
             "according to PAdES standard.\n\n"
             "Private keys are securely stored on USB drives, encrypted with AES-256."
         )
+
+    def generate_and_save_key(self):
+        pin = self.pin_input.text()
+        if not pin:
+            self.key_status.setText("Error! Please enter a PIN")
+            QApplication.processEvents()
+            return
+
+        if not self.usb_path:
+            self.key_status.setText("Error! No USB drive detected")
+            QApplication.processEvents()
+            return
+
+        if not self.public_key_path:
+            self.key_status.setText("Error! Specify where to save the private key")
+            QApplication.processEvents()
+            return
+
+        try:
+            self.key_status.setText("Creating private and public keys pair...")
+            QApplication.processEvents()
+            key_generator = KeyGenerator()
+            private_key, public_key = key_generator.generate_key_pair()
+            time.sleep(2)
+
+            self.key_status.setText("Encrypting private key...")
+            QApplication.processEvents()
+            encrypted_key = key_generator.encrypt_private_key(pin)
+            time.sleep(2)
+
+            self.key_status.setText("Saving key to USB drive...")
+            QApplication.processEvents()
+            UsbStorage.save_to_usb(self.usb_path, "private_key.key", encrypted_key)
+            public_key_file = os.path.join(self.public_key_path, "public_key.pem")
+            with open(public_key_file, "wb") as f:
+                f.write(public_key.public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo
+                ))
+
+            self.key_status.setText("Key generated and saved successfully")
+            QApplication.processEvents()
+
+        except Exception as e:
+            self.key_status.setText(f"Error! Failed to generate and save key: {str(e)}")
+            QApplication.processEvents()

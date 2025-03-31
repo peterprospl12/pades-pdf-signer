@@ -1,73 +1,54 @@
-import time
-import fitz  
-from cryptography.hazmat.primitives import hashes
+import hashlib
+from datetime import datetime
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.primitives.asymmetric import padding
-import base64
-import json
-from .pdf_utils import compute_document_hash
+from cryptography.hazmat.primitives.hashes import SHA256
+from PyPDF2 import PdfReader, PdfWriter
+import io
 
 class PDFSigner:
-    
-    def __init__(self, private_key=None):
-        self.private_key = private_key
-        
-    def set_private_key(self, private_key):
-        self.private_key = private_key
-        
-    def sign_document(self, pdf_path, output_path, signer_info=None):
+
+    def __init__(self, private_key_pem):
+        self.private_key = load_pem_private_key(private_key_pem, password=None)
+
+    def sign_document(self, pdf_path, output_path, signer_name):
         if not self.private_key:
             raise ValueError("No private key available for signing")
-            
-        document_hash = compute_document_hash(pdf_path)
-        
+
+        # Open PDF file
+        reader = PdfReader(pdf_path)
+        writer = PdfWriter()
+
+        # Copying input file to output PDF
+        for page in reader.pages:
+            writer.add_page(page)
+
+        # Temporary saving document without metadata
+        temp_stream = io.BytesIO()
+        writer.write(temp_stream)
+        temp_stream.seek(0)
+
+        # Hashing the document
+        hasher = hashlib.sha256()
+        hasher.update(temp_stream.getvalue())
+        doc_hash = hasher.digest()
+
+        # Signing PDF hash using our private key
         signature = self.private_key.sign(
-            document_hash,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256()
+            doc_hash,
+            padding.PKCS1v15(),
+            SHA256()
         )
-        
-        if signer_info is None:
-            signer_info = {}
-            
-        signature_data = {
-            "version": "1.0",
-            "timestamp": time.time(),
-            "signer": signer_info,
-            "signature": base64.b64encode(signature).decode('utf-8'),
-            "hash_algorithm": "SHA-256"
-        }
-        
-        pdf_document = fitz.open(pdf_path)
-        
-        metadata = pdf_document.metadata
-        metadata["pades_signature"] = json.dumps(signature_data)
-        pdf_document.set_metadata(metadata)
-        
-        last_page = pdf_document[-1]
-        
-        signature_text = f"Digitally signed by: {signer_info.get('name', 'Unknown')}\n"
-        signature_text += f"Date: {time.strftime('%Y-%m-%d %H:%M:%S')}"
-        
-        page_rect = last_page.rect
-        signature_rect = fitz.Rect(
-            page_rect.width - 200, 
-            page_rect.height - 100, 
-            page_rect.width - 20, 
-            page_rect.height - 20
-        )
-        
-        last_page.draw_rect(signature_rect, color=(0, 0, 0))
-        last_page.insert_textbox(
-            signature_rect, 
-            signature_text, 
-            fontsize=9, 
-            align=1
-        )
-        
-        pdf_document.save(output_path)
-        pdf_document.close()
-        
+
+        # Adding sign metadata
+        writer.add_metadata({
+            '/SignedBy': signer_name,
+            '/Signature': signature.hex(),
+            '/SigningDate': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+
+        # Save signer pdf file
+        with open(output_path, "wb") as output_file:
+            writer.write(output_file)
+
         return output_path

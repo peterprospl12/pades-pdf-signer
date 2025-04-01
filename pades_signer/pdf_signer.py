@@ -1,3 +1,7 @@
+"""
+Module providing functionality for signing PDF documents using simplified PAdES standard.
+"""
+
 import hashlib
 from datetime import datetime
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
@@ -7,11 +11,34 @@ from PyPDF2 import PdfReader, PdfWriter
 import io
 
 class PDFSigner:
+    """
+    Class responsible for signing PDF documents using simplified PAdES standard.
+    """
 
     def __init__(self, private_key_pem):
+        """
+        Initialize the PDF signer with a private key.
+
+        Args:
+            private_key_pem (bytes): Private key in PEM format used for signing.
+        """
         self.private_key = load_pem_private_key(private_key_pem, password=None)
 
     def sign_document(self, pdf_path, output_path, signer_name):
+        """
+        Sign a PDF document and save signed copy of PDF to the specified output path.
+
+        Args:
+            pdf_path (str): Path to the PDF document to be signed.
+            output_path (str): Path where the signed document will be saved.
+            signer_name (str): Name of the person signing the document.
+
+        Returns:
+            str: Path to the signed document.
+
+        Raises:
+            ValueError: When no private key is available for signing.
+        """
         if not self.private_key:
             raise ValueError("No private key available for signing")
 

@@ -1,3 +1,7 @@
+"""
+Module containing the graphical user interface for the PAdES Signer application.
+"""
+
 import os
 import sys
 import time
@@ -14,17 +18,32 @@ from key_manager.key_generator import KeyGenerator, decrypt_private_key
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class USBDetectorThread(QThread):
+    """
+    Thread for continuous USB drive detection.
+
+    Signals:
+        usb_detected (list): Signal emitted when USB drives are detected.
+    """
     usb_detected = pyqtSignal(list)
     
     def run(self):
+        """
+        Thread execution method that continuously checks for USB drives.
+        """
         while True:
             usb_drives = UsbStorage.get_usb_drives()
             self.usb_detected.emit(usb_drives)
             time.sleep(2)
 
 class MainWindow(QMainWindow):
+    """
+    Main application window containing UI elements for signing and verifying documents.
+    """
     
     def __init__(self):
+        """
+        Initialize the main window and UI components.
+        """
         super().__init__()
 
         self.public_key_path = None
@@ -56,7 +75,9 @@ class MainWindow(QMainWindow):
         self.start_usb_detection()
         
     def init_ui(self):
-        """Initialize UI components."""
+        """
+        Initialize UI components.
+        """
         self.tabs = QTabWidget()
         self.sign_tab = QWidget()
         self.verify_tab = QWidget()
@@ -79,6 +100,11 @@ class MainWindow(QMainWindow):
         self.status_bar.addPermanentWidget(self.usb_status)
         
     def setup_sign_tab(self):
+        """
+        Configure the Sign Document tab with necessary UI components.
+
+        Creates a layout with file selection, document signing button and status indicator.
+        """
         layout = QVBoxLayout()
         
         file_layout = QHBoxLayout()
@@ -107,6 +133,12 @@ class MainWindow(QMainWindow):
         self.sign_tab.setLayout(layout)
         
     def setup_verify_tab(self):
+        """
+        Configure the Verify Signature tab with necessary UI components.
+
+        Creates a layout with signed file selection, public key selection,
+        signature verification button and status indicator.
+        """
         layout = QVBoxLayout()
         
         file_layout = QHBoxLayout()
@@ -139,6 +171,12 @@ class MainWindow(QMainWindow):
         self.verify_tab.setLayout(layout)
 
     def setup_key_tab(self):
+        """
+        Configure the Generate Key tab with necessary UI components.
+
+        Creates a layout with PIN entry field, public key save path selection,
+        key generation button and status indicator.
+        """
         layout = QVBoxLayout()
 
         pin_layout = QHBoxLayout()
@@ -171,12 +209,20 @@ class MainWindow(QMainWindow):
         self.key_tab.setLayout(layout)
 
     def select_public_key_path(self):
+        """
+        Open a folder selection dialog to choose where to save the public key.
+
+        Updates the public_key_path_label with the selected path.
+        """
         folder_path = QFileDialog.getExistingDirectory(self, "Pick directory where public key will be saved")
         if folder_path:
             self.public_key_path = folder_path
             self.public_key_path_label.setText(folder_path)
         
     def setup_menu(self):
+        """
+        Setup the application's menu bar with File and Help menus.
+        """
         menu_bar = self.menuBar()
         
         file_menu = menu_bar.addMenu("File")
@@ -192,11 +238,20 @@ class MainWindow(QMainWindow):
         help_menu.addAction(about_action)
         
     def start_usb_detection(self):
+        """
+        Start the USB detection thread that continuously monitors for connected USB drives.
+        """
         self.usb_detector_thread = USBDetectorThread()
         self.usb_detector_thread.usb_detected.connect(self.update_usb_status)
         self.usb_detector_thread.start()
         
     def update_usb_status(self, usb_drives):
+        """
+        Update the UI with the status of connected USB drives.
+
+        Args:
+            usb_drives (list): List of detected USB drive paths.
+        """
         if usb_drives:
             self.usb_path = usb_drives[0]
             self.usb_status.setText(f"USB Connected: {self.usb_path}")
@@ -205,8 +260,14 @@ class MainWindow(QMainWindow):
             self.usb_path = None
             self.encrypted_key_path = None
             self.usb_status.setText("USB Status: Not Connected")
+            self.sign_status.setText("No private key detected!")
             
     def check_for_keys(self):
+        """
+        Check if any key files exist on the connected USB drive.
+
+        Updates the USB status label with key detection information.
+        """
         if not self.usb_path:
             return
             
@@ -214,23 +275,42 @@ class MainWindow(QMainWindow):
             if filename.endswith('.key'):
                 self.encrypted_key_path = os.path.join(self.usb_path, filename)
                 self.usb_status.setText(f"USB Connected: {self.usb_path} (Key found)")
-                # self.sign_status.setText("Ready")
+                self.sign_status.setText("Ready")
                 QApplication.processEvents()
                 return
 
+        self.sign_status.setText("No private key detected!")
         self.usb_status.setText(f"USB Connected: {self.usb_path} (No key found)")
     
     def select_pdf_file(self):
+        """
+        Open a file selection dialog to choose a PDF document for signing.
+
+        Updates the pdf_path_label with the selected file path.
+        """
         file_path, _ = QFileDialog.getOpenFileName(self, "Select PDF File", "", "PDF Files (*.pdf)")
         if file_path:
             self.pdf_path_label.setText(file_path)
             
     def select_verify_file(self):
+        """
+        Open a file selection dialog to choose a signed PDF document for verification.
+
+        Updates the verify_path_label with the selected file path.
+        """
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Signed PDF File", "", "PDF Files (*.pdf)")
         if file_path:
             self.verify_path_label.setText(file_path)
             
     def select_public_key(self):
+        """
+        Open a file selection dialog to choose a public key file for signature verification.
+
+        Loads the selected public key and updates the public_key_label with the file path.
+
+        Raises:
+            Exception: When the public key cannot be loaded.
+        """
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Public Key", "", "PEM Files (*.pem)")
         if file_path:
             try:
@@ -241,8 +321,15 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Failed to load public key: {str(e)}")
 
 
-
     def sign_document(self):
+        """
+        Sign a PDF document using the private key stored on the USB drive.
+
+        Prompts for PIN to decrypt the private key, then signs the document
+        and saves it with a 'signed_' prefix.
+
+        Updates the sign_status label with progress and result information.
+        """
         if not self.encrypted_key_path:
             self.sign_status.setText("No private key found on USB drive")
             QApplication.processEvents()
@@ -289,6 +376,11 @@ class MainWindow(QMainWindow):
             print(str(e))
             
     def verify_signature(self):
+        """
+        Verify the digital signature in a PDF document using the selected public key.
+
+        Updates the verify_status label with verification results.
+        """
         if not self.public_key:
             self.sign_status.setText("Please select a public key first")
             QApplication.processEvents()
@@ -318,14 +410,26 @@ class MainWindow(QMainWindow):
             self.verify_status.setText(f"Error: Failed to verify signature: {str(e)}")
             
     def show_about(self):
+        """
+        Display an information dialog with details about the application.
+        """
         QMessageBox.about(self, "About PAdES Signer",
             "PAdES Signature Application\n\n"
             "This application allows you to create and verify qualified electronic signatures "
-            "according to PAdES standard.\n\n"
+            "according to simplified PAdES standard.\n\n"
             "Private keys are securely stored on USB drives, encrypted with AES-256."
         )
 
     def generate_and_save_key(self):
+        """
+        Generate a new key pair, encrypt the private key with the provided PIN,
+        and save the keys to appropriate locations.
+
+        The private key is encrypted and saved to the USB drive,
+        while the public key is saved to the selected path.
+
+        Updates the key_status label with progress and result information.
+        """
         pin = self.pin_input.text()
         if not pin:
             self.key_status.setText("Error! Please enter a PIN")

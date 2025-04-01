@@ -1,3 +1,7 @@
+"""
+Module providing functionality for verifying digital signatures in PDF documents.
+"""
+
 import hashlib
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.hashes import SHA256
@@ -7,6 +11,15 @@ import io
 
 
 def extract_signature_data(pdf_path):
+    """
+    Extract signature data from PDF metadata.
+
+    Args:
+        pdf_path (str): Path to the signed PDF file.
+
+    Returns:
+        dict or None: Dictionary containing signature data if present, None otherwise.
+    """
     reader = PdfReader(pdf_path)
     metadata = reader.metadata
 
@@ -28,11 +41,30 @@ def extract_signature_data(pdf_path):
 
 
 class SignatureVerifier:
+    """
+    Class responsible for verifying digital signatures in PDF documents.
+    """
 
     def __init__(self, public_key=None):
+        """
+        Initialize the signature verifier with a public key.
+
+        Args:
+            public_key: Public key used for signature verification (default: None).
+        """
         self.public_key = public_key
 
     def verify_signature(self, pdf_path):
+        """
+        Verify the digital signature in a PDF document.
+
+        Args:
+            pdf_path (str): Path to the signed PDF file.
+
+        Returns:
+            tuple: (is_valid, message) where is_valid is a boolean indicating if the signature is valid,
+                   and message is a string with verification details or error information.
+        """
         if not self.public_key:
             return False, "No public key provided"
 

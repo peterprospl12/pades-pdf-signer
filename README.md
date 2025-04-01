@@ -1,7 +1,7 @@
 # PAdES PDF Signer
 
 A desktop application for creating and verifying qualified electronic signatures in PDF documents according to the PAdES (PDF Advanced Electronic Signature) standard.
-
+![pades_app_image](https://github.com/user-attachments/assets/0a3ba155-239c-45f2-a0ce-73e913718525)
 
 ## Features
 

@@ -349,8 +349,15 @@ class MainWindow(QMainWindow):
             encrypted_data = UsbStorage.load_from_usb(self.encrypted_key_path)
             
             self.sign_status.setText("Decrypting private key...")
-            self.private_key = decrypt_private_key(encrypted_data, pin)
             QApplication.processEvents()
+
+            try:
+                self.private_key = decrypt_private_key(encrypted_data, pin)
+            except ValueError:
+                QMessageBox.critical(self, "Invalid PIN", "The PIN you entered is incorrect. Please try again.")
+                self.sign_status.setText("Invalid PIN. Operation cancelled.")
+                QApplication.processEvents()
+                return
             time.sleep(2)
             
             signer_name, ok = QInputDialog.getText(self, "Signer Information", "Enter signer name:")
